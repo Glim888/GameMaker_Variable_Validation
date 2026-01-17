@@ -1,0 +1,112 @@
+
+/// @desc check the scheme ob an variable
+/// @param {any} _value The value to check for
+/// @param {any} _scheme The scheme to chevk against
+/// @return {bool} validation passed
+function variable_check_scheme(_value, _scheme) {
+    
+    // check datatype
+    if (is_string(_scheme)) {
+        
+        _scheme = json_parse(_scheme);
+        var _type = string_split(_scheme.type, "|");
+        
+        var _len = array_length(_type);
+        var _fail;
+        for (var _j=0;_j<_len;_j++) { 
+            
+            // get type and additionally parameters
+            var _t = _type[_j]; 
+            var _min = struct_exists(_scheme, "min") ? _scheme.min : -infinity;
+            var _max = struct_exists(_scheme, "max") ? _scheme.max : infinity;
+            
+           if (_t == "string") {
+    
+                if (is_string(_value) && string_length(_value) >= _min && string_length(_value) <= _max) {
+                    return true;
+                }else{
+                    _fail = $"Validation failed: {_value} should be {_t} in range ({_min}-{_max})";
+                }
+
+           }
+           else if (_t == "numeric") {
+                
+                 if (is_numeric(_value) && _value >= _min && _value <= _max) {
+                    return true;
+                }else{
+                    _fail = $"Validation failed: {_value} should be {_t} in range ({_min}-{_max})";
+                }
+
+           }
+           else if (_t == "callable") {
+            
+                if (is_callable(_value)) {
+                    return true;
+                }else{
+                    _fail = $"Validation failed: {_value} should be {_t}";
+                }
+            
+           }
+           else if (_t == "boolean") {
+            
+                if (is_bool(_value)) {
+                    return true;
+                }else{
+                    _fail = $"Validation failed: {_value} should be {_t}";
+                }
+            
+           }
+           else if (_t == "undefined") {
+                if (is_undefined(_value)) {
+                    return true;
+                }else{
+                    _fail = $"Validation failed: {_value} should be {_t}";
+                }
+           }
+        }
+        
+        if (_fail != undefined) {
+            show_message(_fail);
+        }
+        
+        return false;
+        
+    }else{
+        
+        // is struct --> go deeper
+        if (is_struct(_scheme)) {
+        
+            // check struct fields
+            var _struct_fields = struct_get_names(_scheme);
+            for (var _i=0; _i<array_length(_struct_fields); _i++) {
+                
+                var _v = _value[$_struct_fields[_i]];
+                var _type = _scheme[$_struct_fields[_i]];
+                
+                if (!variable_check_scheme(_v, _type)) {
+                    return false;   
+                }
+            }
+            
+            return true;
+        
+        }
+        
+        // is array --> go deeper
+        else if (is_array(_scheme)) {
+            for (var _i=0; _i<array_length(_scheme); _i++) {
+                
+                var _v = _value[_i];
+                var _type = _scheme[_i];
+                
+                if (!variable_check_scheme(_v, _type)) {
+                    return false;   
+                }
+            }
+            return true;
+        }   
+        else {
+            return false;
+        }
+    }
+}
