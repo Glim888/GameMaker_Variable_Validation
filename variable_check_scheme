@@ -13,7 +13,7 @@ function variable_check_scheme(_value, _scheme) {
         
         var _len = array_length(_type);
 
-        var _fail;
+        var _fail=undefined;
         for (var _j=0;_j<_len;_j++) { 
             
             // get type and additionally parameters
@@ -96,7 +96,7 @@ function variable_check_scheme(_value, _scheme) {
             show_debug_message(_scheme.message);
         }else
         if (_fail != undefined) {
-            show_debug_message(_scheme);
+            show_debug_message(_fail);
         }
         
         return false;
