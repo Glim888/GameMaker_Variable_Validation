@@ -12,6 +12,7 @@ function variable_check_scheme(_value, _scheme) {
         var _type = string_split(_scheme.type, "|");
         
         var _len = array_length(_type);
+
         var _fail;
         for (var _j=0;_j<_len;_j++) { 
             
@@ -19,26 +20,28 @@ function variable_check_scheme(_value, _scheme) {
             var _t = _type[_j]; 
             var _min = struct_exists(_scheme, "min") ? _scheme.min : -infinity;
             var _max = struct_exists(_scheme, "max") ? _scheme.max : infinity;
+            var _const = struct_exists(_scheme, "const") ? string_split(_scheme.const, ",") : undefined;
             
-           if (_t == "string") {
-    
-                if (is_string(_value) && string_length(_value) >= _min && string_length(_value) <= _max) {
-                    return true;
-                }else{
-                    _fail = $"Validation failed: {_value} should be {_t} in range ({_min}-{_max})";
-                }
-
-           }
-           else if (_t == "numeric") {
+            if (_t == "string") {
                 
-                 if (is_numeric(_value) && _value >= _min && _value <= _max) {
+                var _l = string_length(_value)
+                if (is_string(_value) && _l >= _min && _l <= _max && (_const == undefined || array_contains(_const, _value))) {
                     return true;
                 }else{
                     _fail = $"Validation failed: {_value} should be {_t} in range ({_min}-{_max})";
                 }
 
-           }
-           else if (_t == "callable") {
+            }
+            else if (_t == "numeric") {
+                
+                 if (is_numeric(_value) && _value >= _min && _value <= _max && (_const == undefined || array_contains(_const, _value))) {
+                    return true;
+                }else{
+                    _fail = $"Validation failed: {_value} should be {_t} in range ({_min}-{_max})";
+                }
+
+            }
+            else if (_t == "callable") {
             
                 if (is_callable(_value)) {
                     return true;
@@ -46,8 +49,8 @@ function variable_check_scheme(_value, _scheme) {
                     _fail = $"Validation failed: {_value} should be {_t}";
                 }
             
-           }
-           else if (_t == "boolean") {
+            }
+            else if (_t == "boolean") {
             
                 if (is_bool(_value)) {
                     return true;
@@ -55,18 +58,45 @@ function variable_check_scheme(_value, _scheme) {
                     _fail = $"Validation failed: {_value} should be {_t}";
                 }
             
-           }
-           else if (_t == "undefined") {
+            }
+            else if (_t == "undefined") {
                 if (is_undefined(_value)) {
                     return true;
                 }else{
                     _fail = $"Validation failed: {_value} should be {_t}";
                 }
-           }
+            }
+            else if (_t == "base_64") {
+                if (is_base64(_value)) {
+                    return true;
+                }else{
+                    _fail = $"Validation failed: {_value} should be {_t}";
+                }
+            }
+            else if (_t == "datetime") {
+                if (is_iso_datetime(_value)) {
+                    return true;
+                }else{
+                    _fail = $"Validation failed: {_value} should be {_t}";
+                }
+            }
+            else if (_t == "guid") {
+                if (is_guid(_value)) {
+                    return true;
+                }else{
+                    _fail = $"Validation failed: {_value} should be {_t}";
+                }
+            }
+            else if (_t == "any") {
+                return true;
+            }
         }
         
+        if (struct_exists(_scheme, "message")) {
+            show_debug_message(_scheme.message);
+        }else
         if (_fail != undefined) {
-            show_message(_fail);
+            show_debug_message(_scheme);
         }
         
         return false;
@@ -75,7 +105,12 @@ function variable_check_scheme(_value, _scheme) {
         
         // is struct --> go deeper
         if (is_struct(_scheme)) {
-        
+            
+            if (!is_struct(_value)) {
+                show_debug_message($"{_value} should be {_scheme}");
+                return false;
+            }
+            
             // check struct fields
             var _struct_fields = struct_get_names(_scheme);
             for (var _i=0; _i<array_length(_struct_fields); _i++) {
@@ -94,11 +129,16 @@ function variable_check_scheme(_value, _scheme) {
         
         // is array --> go deeper
         else if (is_array(_scheme)) {
-            for (var _i=0; _i<array_length(_scheme); _i++) {
+            
+            if (!is_array(_value)) {
+                show_debug_message($"{_value} should be {_scheme}");
+                return false;
+            }
+            
+            for (var _i=0; _i<array_length(_value); _i++) {
                 
                 var _v = _value[_i];
-                var _type = _scheme[_i];
-                
+                var _type = _scheme[0];
                 if (!variable_check_scheme(_v, _type)) {
                     return false;   
                 }
@@ -110,3 +150,63 @@ function variable_check_scheme(_value, _scheme) {
         }
     }
 }
+
+
+/// @desc check if the variable is base_64
+/// @param {any} _s
+/// @return {bool}
+function is_base64(_s) {
+    try {
+        base64_decode(_s);
+        return true;
+    }catch(e) {
+        return false;
+    }
+}
+
+/// @description check if the variable is a datetime
+/// @param {any} _s
+/// @return {bool}
+function is_iso_datetime(_v) {
+    
+    if (!is_string(_v)) return false;
+    
+    // Must be exactly 24 chars: YYYY-MM-DDT00:00:00.000Z
+    if (string_length(_v) != 24) return false;
+    
+    // Check separator positions
+    if (string_char_at(_v, 5) != "-" || string_char_at(_v, 8) != "-" || 
+        string_char_at(_v, 11) != "T" || string_char_at(_v, 14) != ":" ||
+        string_char_at(_v, 17) != ":" || string_char_at(_v, 20) != ".") return false;
+    
+    // Extract parts
+    var _y = real(string_copy(_v, 1, 4));
+    var _m = real(string_copy(_v, 6, 2));
+    var _d = real(string_copy(_v, 9, 2));
+    
+    // Basic numeric range checks
+    if (is_nan(_y) || is_nan(_m) || is_nan(_d)) return false;
+    if (_m < 1 || _m > 12) return false;
+    if (_d < 1 || _d > 31) return false;
+    
+    return true;
+}
+
+/// @desc Check if this is a valid GUID / UUID (RFC 4122)
+/// @param {any} _guid
+/// @return {bool}
+function is_guid(_guid) {
+    if (!is_string(_guid)) return false;
+    if (string_length(_guid) != 36) return false;
+
+    // Check hyphen positions: 8-4-4-4-12
+    if (string_char_at(_guid, 9)  != "-") return false;
+    if (string_char_at(_guid, 14) != "-") return false;
+    if (string_char_at(_guid, 19) != "-") return false;
+    if (string_char_at(_guid, 24) != "-") return false;
+
+    return true;
+}
+
+
+
